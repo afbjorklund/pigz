@@ -1,0 +1,12 @@
+*.o
+*.o.d
+.ninja_log
+.ninja_deps
+pigz
+unpigz
+pigzt
+pigzn
+# test
+pigz.c.gz
+pigz.c.zz
+pigz.c.zip

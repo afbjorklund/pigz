@@ -1,0 +1,115 @@
+cc = cc
+cflags = -O3 -Wall -Wextra
+libs = -lz
+ldflags =
+ZOPFLI = zopfli/src/zopfli/
+
+rule cc
+  command = $cc -MMD -MT $out -MF $out.d $cflags -c $in -o $out
+  description = CC $out
+  depfile = $out.d
+
+rule cc_t
+  command = $cc -MMD -MT $out -MF $out.d $cflags -DDEBUG -g -c $in -o $out
+  description = CC $out
+  depfile = $out.d
+
+rule cc_n
+  command = $cc -MMD -MT $out -MF $out.d $cflags -DDEBUG -DNOTHREAD -g -c $in -o $out
+  description = CC $out
+  depfile = $out.d
+
+rule link
+  command = $cc $ldflags -o $out $in -lpthread -lm $libs
+  description = LINK $out
+
+rule link_t
+  command = $cc $ldflags -o $out $in -lpthread -lm $libs
+  description = LINK $out
+
+rule link_n
+  command = $cc $ldflags -o $out $in -lm $libs
+  description = LINK $out
+
+build pigz: link pigz.o yarn.o try.o ${ZOPFLI}deflate.o ${ZOPFLI}blocksplitter.o ${ZOPFLI}tree.o ${ZOPFLI}lz77.o ${ZOPFLI}cache.o ${ZOPFLI}hash.o ${ZOPFLI}util.o  ${ZOPFLI}squeeze.o ${ZOPFLI}katajainen.o
+
+rule ln
+  command = ln -f $in $out
+  description = LN $out
+
+build unpigz: ln pigz
+
+default pigz unpigz
+
+build pigz.o: cc pigz.c
+
+build yarn.o: cc yarn.c
+
+build try.o: cc try.c
+
+build ${ZOPFLI}deflate.o: cc ${ZOPFLI}deflate.c
+
+build ${ZOPFLI}blocksplitter.o: cc ${ZOPFLI}blocksplitter.c
+
+build ${ZOPFLI}tree.o: cc ${ZOPFLI}tree.c
+
+build ${ZOPFLI}lz77.o: cc ${ZOPFLI}lz77.c
+
+build ${ZOPFLI}cache.o: cc ${ZOPFLI}cache.c
+
+build ${ZOPFLI}hash.o: cc ${ZOPFLI}hash.c
+
+build ${ZOPFLI}util.o: cc ${ZOPFLI}util.c
+
+build ${ZOPFLI}squeeze.o: cc ${ZOPFLI}squeeze.c
+
+build ${ZOPFLI}katajainen.o: cc ${ZOPFLI}katajainen.c
+
+build dev: phony pigz pigzt pigzn
+
+build pigzt: link_t pigzt.o yarnt.o try.o ${ZOPFLI}deflate.o ${ZOPFLI}blocksplitter.o ${ZOPFLI}tree.o ${ZOPFLI}lz77.o ${ZOPFLI}cache.o ${ZOPFLI}hash.o ${ZOPFLI}util.o ${ZOPFLI}squeeze.o ${ZOPFLI}katajainen.o
+
+build pigzt.o: cc_t pigz.c
+
+build yarnt.o: cc_t yarn.c
+
+build pigzn: link_n pigzn.o tryn.o ${ZOPFLI}deflate.o ${ZOPFLI}blocksplitter.o ${ZOPFLI}tree.o ${ZOPFLI}lz77.o ${ZOPFLI}cache.o ${ZOPFLI}hash.o ${ZOPFLI}util.o ${ZOPFLI}squeeze.o ${ZOPFLI}katajainen.o
+
+build pigzn.o: cc_n pigz.c
+
+build tryn.o: cc_n try.c
+
+rule test
+  command = $
+    ./pigz -kf pigz.c ; ./pigz -t pigz.c.gz && $
+    ./pigz -kfb 32 pigz.c ; ./pigz -t pigz.c.gz && $
+    ./pigz -kfp 1 pigz.c ; ./pigz -t pigz.c.gz && $
+    ./pigz -kfz pigz.c ; ./pigz -t pigz.c.zz && $
+    ./pigz -kfK pigz.c ; ./pigz -t pigz.c.zip && $
+    printf "" | ./pigz -cdf | wc -c | test `cat` -eq 0 && $
+    printf "x" | ./pigz -cdf | wc -c | test `cat` -eq 1 && $
+    printf "xy" | ./pigz -cdf | wc -c | test `cat` -eq 2 && $
+    printf "xyz" | ./pigz -cdf | wc -c | test `cat` -eq 3 && $
+    (printf "w" | gzip ; printf "x") | ./pigz -cdf | wc -c | test `cat` -eq 2 && $
+    (printf "w" | gzip ; printf "xy") | ./pigz -cdf | wc -c | test `cat` -eq 3 && $
+    (printf "w" | gzip ; printf "xyz") | ./pigz -cdf | wc -c | test `cat` -eq 4 && $
+    if test "`which compress | grep /`" != ""; then $
+      compress -f < pigz.c | ./unpigz | cmp - pigz.c ;$
+    fi
+  description = TEST $in
+
+build test pigz.c.gz pigz.c.zz pigz.c.zip: test pigz unpigz
+
+rule tests
+  command = ./pigzn -kf pigz.c && ./pigz -t pigz.c.gz
+  description = TEST $in
+
+build tests: tests dev test
+
+build docs: phony pigz.pdf
+
+rule man2pdf
+  command = groff -mandoc -f H -T ps $in | ps2pdf - $out
+  description = MAN2PDF $out
+
+build pigz.pdf: man2pdf pigz.1
